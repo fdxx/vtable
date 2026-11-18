@@ -1,6 +1,5 @@
-var Module = {};
-var runtimeReady = new Promise(function(resolve) { Module.onRuntimeInitialized = resolve; });
 importScripts('vtable.js');
+var runtimeReady = Module();
 
 function demangleSymbol(func) {
   try {
@@ -146,7 +145,7 @@ self.onmessage = async function(event) {
   var binary;
   try {
     binary = await download(event.data);
-    await runtimeReady;
+    Module = await runtimeReady;
   } catch (e) {
     self.postMessage({ error: e.message });
     return;
