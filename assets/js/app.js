@@ -210,7 +210,6 @@ function RenderHome()
       ${config.games.map((g) => `
         <a class="game" href="${GameHref(g)}">
           <div class="cover" style="--h:${Hue(g.name)}">${Esc(g.name)}</div>
-          <div class="game-meta">${g.bins.map((b) => Esc(Basename(b))).join(' · ')}</div>
         </a>`).join('')}
     </div>`;
   window.scrollTo(0, 0);

@@ -4,9 +4,21 @@
 		{
 			"name": "L4D2",
 			"bins": [
+				"left4dead2/datacache_srv.so",
 				"left4dead2/engine_srv.so",
+				"left4dead2/libvstdlib_srv.so",
+				"left4dead2/materialsystem_srv.so",
 				"left4dead2/server_srv.so",
-				"left4dead2/matchmaking_ds_srv.so"
+				"left4dead2/soundemittersystem_srv.so",
+				"left4dead2/unitlib_srv.so",
+				"left4dead2/vscript_srv.so",
+				"left4dead2/dedicated_srv.so",
+				"left4dead2/libtier0_srv.so",
+				"left4dead2/matchmaking_ds_srv.so",
+				"left4dead2/scenefilecache_srv.so",
+				"left4dead2/shaderapiempty_srv.so",
+				"left4dead2/studiorender_srv.so",
+				"left4dead2/vphysics_srv.so"
 			]
 		}
 	]

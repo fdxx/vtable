@@ -106,8 +106,6 @@ main { flex: 1; padding-top: 28px; padding-bottom: 40px; }
   text-shadow: 0 2px 12px rgb(0 0 0 / .25);
 }
 
-.game-meta { padding: 10px 14px; color: var(--muted); font-size: 12px; }
-
 /* Loading */
 .loading { max-width: 560px; margin: 40px auto; }
 .loading h2 { margin: 0 0 16px; font-size: 18px; font-weight: 600; }
