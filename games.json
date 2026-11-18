@@ -1,17 +1,13 @@
 {
 	"base": "bins/",
-	"games": [{
-	  "appid": 550,
-	  "name": "L4D2",
-	  "bins": [{
-		"type": "Engine",
-		"path": "left4dead2/engine_srv.so"
-	  }, {
-		"type": "Server",
-		"path": "left4dead2/server_srv.so"
-	  }, {
-		"type": "Matchmaking",
-		"path": "left4dead2/matchmaking_ds_srv.so"
-	  }]
-	}]
+	"games": [
+		{
+			"name": "L4D2",
+			"bins": [
+				"left4dead2/engine_srv.so",
+				"left4dead2/server_srv.so",
+				"left4dead2/matchmaking_ds_srv.so"
+			]
+		}
+	]
 }

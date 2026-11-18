@@ -1,4 +1,5 @@
 var Module = {};
+var runtimeReady = new Promise(function(resolve) { Module.onRuntimeInitialized = resolve; });
 importScripts('vtable.js');
 
 function demangleSymbol(func) {
@@ -86,7 +87,7 @@ function sendProgressUpdate(force) {
     return;
   }
 
-  self.postMessage({ loaded: loaded, total: total });
+  self.postMessage({ phase: 'parse', loaded: loaded, total: total });
   lastProgressUpdate = now;
 }
 
@@ -106,8 +107,53 @@ function isZero(n) {
   return n.low === 0 && n.high === 0;
 }
 
-self.onmessage = function(event) {
-  var programInfo = Module.process(event.data);
+async function download(url) {
+  var response = await fetch(url);
+  if (!response.ok) {
+    throw new Error('HTTP ' + response.status);
+  }
+
+  var total = Number(response.headers.get('Content-Length')) || 0;
+  var buffer = new Uint8Array(total);
+  var loaded = 0;
+  var lastUpdate = 0;
+  var reader = response.body.getReader();
+  for (;;) {
+    var result = await reader.read();
+    if (result.done) {
+      break;
+    }
+
+    if (loaded + result.value.length > buffer.length) {
+      var grown = new Uint8Array(Math.max(buffer.length * 2, loaded + result.value.length));
+      grown.set(buffer.subarray(0, loaded));
+      buffer = grown;
+    }
+    buffer.set(result.value, loaded);
+    loaded += result.value.length;
+
+    var now = Date.now();
+    if (now - lastUpdate >= 50) {
+      self.postMessage({ phase: 'download', loaded: loaded, total: total });
+      lastUpdate = now;
+    }
+  }
+
+  return buffer.buffer.slice(0, loaded);
+}
+
+self.onmessage = async function(event) {
+  var binary;
+  try {
+    binary = await download(event.data);
+    await runtimeReady;
+  } catch (e) {
+    self.postMessage({ error: e.message });
+    return;
+  }
+
+  self.postMessage({ phase: 'parse', loaded: 0, total: 0 });
+  var programInfo = Module.process(binary);
 
   if (programInfo.error.length > 0) {
     // Don't bother doing any more work.

@@ -1,1 +1,1 @@
-Source Engine binaries vtable dumper for local deployment
+https://fdxx.github.io/vtable/
