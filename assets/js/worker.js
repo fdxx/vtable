@@ -144,13 +144,20 @@ async function download(url) {
 self.onmessage = async function(event) {
   var binary;
   try {
-    binary = await download(event.data);
+    if (event.data instanceof Blob) {
+      self.postMessage({ phase: 'read', total: event.data.size });
+      binary = await event.data.arrayBuffer();
+    } else {
+      binary = await download(event.data);
+    }
     Module = await runtimeReady;
+    ParseBinary(binary);
   } catch (e) {
-    self.postMessage({ error: e.message });
-    return;
+    self.postMessage({ error: e.message || String(e) });
   }
+};
 
+function ParseBinary(binary) {
   self.postMessage({ phase: 'parse', loaded: 0, total: 0 });
   var programInfo = Module.process(binary);
 
@@ -344,4 +351,4 @@ self.onmessage = async function(event) {
 
   sendProgressUpdate(true);
   self.postMessage(out);
-};
+}

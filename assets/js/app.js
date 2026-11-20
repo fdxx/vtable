@@ -1,10 +1,14 @@
 const $app = document.getElementById('app');
 const $crumbs = document.getElementById('crumbs');
+const $localFiles = document.getElementById('local-files');
+const $dropOverlay = document.getElementById('drop-overlay');
 
 const PAGE_SIZE = 100;
 const SEARCH_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
 
 let config = null;
+let localGame = null;
+let loadingGame = null;
 let renderToken = 0;
 let leaveView = null;
 const vtableCache = new WeakMap();
@@ -76,10 +80,17 @@ function Ingest(file, out)
   file.classByName = new Map(out.classes.map((c) => [c.name, c]));
 }
 
-function LoadFile(game, file)
+function LoadFile(game, file, source)
 {
   return new Promise((resolve) => {
     const worker = new Worker('assets/js/worker.js');
+    file.worker = worker;
+    const finish = () => {
+      file.done = true;
+      worker.terminate();
+      UpdateLoadingRow(game, file);
+      resolve();
+    };
     worker.onmessage = ({ data }) => {
       if (data.phase) {
         file.progress = data;
@@ -88,21 +99,29 @@ function LoadFile(game, file)
       }
       if (data.error) file.error = data.error;
       else Ingest(file, data);
-      file.done = true;
-      worker.terminate();
-      UpdateLoadingRow(game, file);
-      resolve();
+      finish();
     };
-    worker.postMessage(new URL(config.base + file.path, location.href).href);
+    worker.onerror = (event) => {
+      event.preventDefault();
+      file.error = event.message || '无法解析文件';
+      finish();
+    };
+    worker.postMessage(source);
   });
 }
 
 function LoadGame(game)
 {
   if (!game.data) {
-    const files = game.bins.map((path) => ({ path, name: Basename(path), progress: null, error: null, classes: [], functions: [] }));
+    const files = game.bins.map((bin, i) => ({
+      path: game.local ? `${game.serial}-${i}` : bin,
+      name: game.local ? bin.name : Basename(bin),
+      progress: null, error: null, classes: [], functions: []
+    }));
     game.data = { files, done: false, search: { q: '', limit: PAGE_SIZE, scroll: 0 } };
-    game.data.ready = Promise.all(files.map((f) => LoadFile(game, f))).then(() => { game.data.done = true; });
+    game.data.ready = Promise.all(files.map((f, i) => LoadFile(game, f,
+      game.local ? game.bins[i] : new URL(config.base + f.path, location.href).href
+    ))).then(() => { game.data.done = true; });
   }
   return game.data;
 }
@@ -172,7 +191,8 @@ async function Render()
   const route = ParseRoute();
   if (!route.game) return RenderHome();
 
-  const game = config.games.find((g) => g.name === route.game);
+  const game = route.game === '本地文件' ? localGame : config.games.find((g) => g.name === route.game);
+  if (!game && route.game === '本地文件') return RenderMessage('请重新拖入本地文件，或点击「打开文件」选择文件。');
   if (!game) return RenderMessage('找不到游戏：' + route.game);
 
   const data = LoadGame(game);
@@ -204,14 +224,20 @@ function RenderHome()
   SetCrumbs('');
   document.title = 'VTable';
   $app.innerHTML = `
-    <h1 class="page-title">选择游戏</h1>
-    <p class="page-sub">搜索类或虚函数，查看 Linux / Windows 虚表索引。</p>
+    <h1 class="page-title">查看虚函数索引</h1>
+    <p class="page-sub">选择游戏，或打开本地二进制文件，查看 Linux / Windows 虚表索引。</p>
+    <button class="drop-zone" type="button">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 17v-6m-3 3 3-3 3 3"/></svg>
+      <strong>拖拽二进制文件到此处，或点击选择</strong>
+      <span>支持 ELF 文件（如 .so），可同时打开多个文件；文件仅在浏览器本地解析。</span>
+    </button>
     <div class="games">
-      ${config.games.map((g) => `
+      ${[...config.games, ...(localGame ? [localGame] : [])].map((g) => `
         <a class="game" href="${GameHref(g)}">
           <div class="cover" style="--h:${Hue(g.name)}">${Esc(g.name)}</div>
         </a>`).join('')}
     </div>`;
+  $app.querySelector('.drop-zone').addEventListener('click', () => $localFiles.click());
   window.scrollTo(0, 0);
 }
 
@@ -219,10 +245,11 @@ function RenderHome()
 
 function RenderLoading(game)
 {
+  loadingGame = game;
   SetCrumbs(`<span>${Esc(game.name)}</span>`);
   document.title = `${game.name} · VTable`;
   $app.innerHTML = `
-    <div class="loading" data-game="${Esc(game.name)}">
+    <div class="loading">
       <h2>正在加载 ${Esc(game.name)}</h2>
       ${game.data.files.map((f, i) => `
         <div class="file-row" data-idx="${i}">
@@ -236,7 +263,7 @@ function RenderLoading(game)
 function UpdateLoadingRow(game, file)
 {
   const root = $app.querySelector('.loading');
-  if (!root || root.dataset.game !== game.name) return;
+  if (!root || loadingGame !== game) return;
 
   const row = root.querySelector(`[data-idx="${game.data.files.indexOf(file)}"]`);
   const p = file.progress;
@@ -248,6 +275,8 @@ function UpdateLoadingRow(game, file)
   } else if (file.done) {
     state = '完成';
     ratio = 1;
+  } else if (p?.phase === 'read') {
+    state = `读取本地文件 ${Mb(p.total)} MB`;
   } else if (p?.phase === 'download') {
     const frac = p.total ? Math.min(p.loaded / p.total, 1) : 0;
     state = `下载 ${Mb(p.loaded)}${p.total ? ' / ' + Mb(p.total) : ''} MB`;
@@ -445,7 +474,7 @@ function RenderDetail(game, route)
 {
   const file = game.data.files.find((f) => f.path === route.file);
   const cls = file?.classByName.get(route.cls);
-  if (!cls) return RenderMessage('找不到类：' + route.cls);
+  if (!cls) return RenderMessage(!file && game.local ? '本地文件已更换，该页面不再可用。' : '找不到类：' + route.cls);
 
   const rows = VTableRows(cls);
   const prefix = cls.name + '::';
@@ -489,9 +518,63 @@ function RenderDetail(game, route)
   else window.scrollTo(0, 0);
 }
 
+/* ---------- Local files ---------- */
+
+function OpenLocalFiles(files)
+{
+  if (!files.length) return;
+  localGame?.data?.files.forEach((f) => f.worker.terminate());
+  localGame = { name: '本地文件', local: true, serial: (localGame?.serial ?? 0) + 1, bins: [...files] };
+  const href = GameHref(localGame);
+  if (location.hash === href) Render();
+  else location.hash = href;
+}
+
+document.getElementById('open-files').addEventListener('click', () => $localFiles.click());
+$localFiles.addEventListener('change', () => {
+  OpenLocalFiles($localFiles.files);
+  $localFiles.value = '';
+});
+
+let dragDepth = 0;
+function ResetDrag()
+{
+  dragDepth = 0;
+  $dropOverlay.hidden = true;
+}
+
+document.addEventListener('dragenter', (e) => {
+  if (!e.dataTransfer.types.includes('Files')) return;
+  e.preventDefault();
+  dragDepth++;
+  $dropOverlay.hidden = false;
+});
+
+document.addEventListener('dragover', (e) => {
+  if (!e.dataTransfer.types.includes('Files')) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+});
+
+document.addEventListener('dragleave', () => {
+  if (dragDepth && --dragDepth === 0) ResetDrag();
+});
+
+document.addEventListener('drop', (e) => {
+  if (e.dataTransfer.types.includes('Files')) {
+    e.preventDefault();
+    OpenLocalFiles(e.dataTransfer.files);
+  }
+  ResetDrag();
+});
+
+document.addEventListener('dragend', ResetDrag);
+window.addEventListener('blur', ResetDrag);
+
 /* ---------- Boot ---------- */
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') ResetDrag();
   if (e.key !== '/' || e.target.matches('input, textarea')) return;
   const input = $app.querySelector('input');
   if (!input) return;

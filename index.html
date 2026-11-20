@@ -13,9 +13,17 @@
     <div class="wrap topbar-inner">
       <a class="brand" href="#/">VTable</a>
       <nav id="crumbs" class="crumbs"></nav>
+      <button id="open-files" class="open-files" type="button">打开文件</button>
     </div>
   </header>
   <main id="app" class="wrap"></main>
+  <input id="local-files" type="file" multiple hidden>
+  <div id="drop-overlay" class="drop-overlay" hidden aria-hidden="true">
+    <div class="drop-prompt">
+      <strong>松开以打开文件</strong>
+      <span>支持同时拖入多个二进制文件</span>
+    </div>
+  </div>
   <footer class="wrap footer">
     基于 <a href="https://github.com/asherkin/vtable" target="_blank" rel="noopener">asherkin/vtable</a>
     · Emscripten &amp; libelf
