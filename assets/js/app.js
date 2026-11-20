@@ -118,7 +118,7 @@ function LoadGame(game)
       name: game.local ? bin.name : Basename(bin),
       progress: null, error: null, classes: [], functions: []
     }));
-    game.data = { files, done: false, search: { q: '', limit: PAGE_SIZE, scroll: 0 } };
+    game.data = { files, done: false, search: { q: '', all: false, limit: PAGE_SIZE, scroll: 0 } };
     game.data.ready = Promise.all(files.map((f, i) => LoadFile(game, f,
       game.local ? game.bins[i] : new URL(config.base + f.path, location.href).href
     ))).then(() => { game.data.done = true; });
@@ -176,10 +176,10 @@ function ParseRoute()
   const [path, query = ''] = location.hash.slice(1).split('?');
   const [game, file, cls] = path.split('/').slice(1).map(decodeURIComponent);
   const params = new URLSearchParams(query);
-  return { game, file, cls, q: params.get('q') || '', f: params.get('f') };
+  return { game, file, cls, q: params.get('q') || '', all: params.has('all'), f: params.get('f') };
 }
 
-const GameHref = (game, q) => `#/${Enc(game.name)}${q ? '?q=' + Enc(q) : ''}`;
+const GameHref = (game, q, all) => `#/${Enc(game.name)}${q ? '?q=' + Enc(q) : all ? '?all' : ''}`;
 const ClassHref = (game, cls, fn) => `#/${Enc(game.name)}/${Enc(cls.file.path)}/${Enc(cls.name)}${fn ? '?f=' + fn.id : ''}`;
 
 async function Render()
@@ -346,6 +346,12 @@ function Search(game, query)
   return items.map((x) => x.item);
 }
 
+function AllClasses(game)
+{
+  game.data.allClasses ??= game.data.files.flatMap((f) => f.classes).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  return game.data.allClasses;
+}
+
 function ResultHtml(game, item, tokens)
 {
   const ranges = MatchRanges(item.key, tokens);
@@ -374,8 +380,9 @@ function ResultHtml(game, item, tokens)
 function RenderSearch(game, route)
 {
   const state = game.data.search;
-  if (route.q !== state.q) {
+  if (route.q !== state.q || route.all !== state.all) {
     state.q = route.q;
+    state.all = route.all;
     state.limit = PAGE_SIZE;
     state.scroll = 0;
   }
@@ -418,11 +425,13 @@ function RenderSearch(game, route)
 
   const run = () => {
     tokens = state.q.toLowerCase().split(/\s+/).filter(Boolean);
-    results = Search(game, state.q);
+    results = tokens.length ? Search(game, state.q) : state.all ? AllClasses(game) : [];
     $results.innerHTML = '';
     $hint.innerHTML = (tokens.length
       ? `找到 ${results.length} 条结果`
-      : `${files.length} 个文件 · ${classCount} 个类 · ${funcCount} 个虚函数 · 按 <kbd>/</kbd> 聚焦搜索框`) + failedHtml;
+      : state.all
+        ? `全部 ${classCount} 个类，按名称排序 <a class="toggle" href="${GameHref(game)}">收起</a>`
+        : `${files.length} 个文件 · ${classCount} 个类 · ${funcCount} 个虚函数 · 按 <kbd>/</kbd> 聚焦搜索框 <a class="toggle" href="${GameHref(game, '', true)}">查看所有类</a>`) + failedHtml;
     if (tokens.length && !results.length) $results.innerHTML = '<div class="empty">没有匹配的结果</div>';
     else renderMore();
   };
@@ -432,6 +441,7 @@ function RenderSearch(game, route)
     clearTimeout(timer);
     timer = setTimeout(() => {
       state.q = $input.value.trim();
+      state.all = false;
       state.limit = PAGE_SIZE;
       history.replaceState(null, '', GameHref(game, state.q));
       run();
@@ -478,7 +488,7 @@ function RenderDetail(game, route)
 
   const rows = VTableRows(cls);
   const prefix = cls.name + '::';
-  const searchHref = GameHref(game, game.data.search.q);
+  const searchHref = GameHref(game, game.data.search.q, game.data.search.all);
 
   SetCrumbs(`<a href="${searchHref}">${Esc(game.name)}</a><span class="mono">${Esc(cls.name)}</span>`);
   document.title = `${cls.name} · ${game.name} · VTable`;

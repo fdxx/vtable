@@ -201,6 +201,8 @@ main { flex: 1; padding-top: 28px; padding-bottom: 40px; }
 
 .hint { margin: 0 2px 14px; color: var(--muted); font-size: 12px; min-height: 18px; }
 .hint .err { color: var(--danger); }
+.hint .toggle { margin-left: 6px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--accent); white-space: nowrap; }
+.hint .toggle:hover { border-color: var(--accent); }
 kbd { padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px; font-family: var(--mono); font-size: 11px; background: var(--surface); }
 
 .results { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
